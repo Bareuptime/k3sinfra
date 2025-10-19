@@ -1,6 +1,12 @@
 #!/bin/bash
 set -euo pipefail
 
+# Setup K3s kubeconfig
+if [ -z "${KUBECONFIG:-}" ] && [ -f /etc/rancher/k3s/k3s.yaml ]; then
+    export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+    echo "Using K3s kubeconfig: $KUBECONFIG"
+fi
+
 echo "Installing Vault in K3s..."
 
 # Add HashiCorp Helm repo

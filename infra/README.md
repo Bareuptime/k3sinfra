@@ -124,6 +124,11 @@ Make sure you have:
 - Helm 3 installed
 - cert-manager installed (for TLS)
 
+**Note**: If running as root, the installation scripts will automatically use `/etc/rancher/k3s/k3s.yaml` for kubeconfig. Alternatively, you can set:
+```bash
+export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+```
+
 ## Quick Start
 
 ```bash
