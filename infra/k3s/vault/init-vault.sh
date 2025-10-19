@@ -10,7 +10,6 @@ echo "Initializing Vault..."
 
 # Wait for Vault pod
 echo "Waiting for Vault pod to be running..."
-# Don't wait for 'ready' - Vault won't be ready until initialized/unsealed
 sleep 5
 until kubectl get pod -n vault -l app.kubernetes.io/name=vault 2>/dev/null | grep -q "Running\|0/"; do
   echo "Waiting for Vault pod..."
@@ -27,22 +26,54 @@ if kubectl get secret vault-unseal-keys -n vault &>/dev/null; then
     echo ""
     echo "Root Token: $ROOT_TOKEN"
     echo ""
-    echo "To unseal manually:"
-    echo "  kubectl exec -n vault $VAULT_POD -- vault operator unseal"
+    echo "To unseal, run these commands:"
+    KEY1=$(kubectl get secret vault-unseal-keys -n vault -o jsonpath='{.data.unseal-key-1}' | base64 -d)
+    KEY2=$(kubectl get secret vault-unseal-keys -n vault -o jsonpath='{.data.unseal-key-2}' | base64 -d)
+    KEY3=$(kubectl get secret vault-unseal-keys -n vault -o jsonpath='{.data.unseal-key-3}' | base64 -d)
+
+    echo "Unsealing Vault..."
+    kubectl exec -n vault $VAULT_POD -- vault operator unseal "$KEY1" || true
+    kubectl exec -n vault $VAULT_POD -- vault operator unseal "$KEY2" || true
+    kubectl exec -n vault $VAULT_POD -- vault operator unseal "$KEY3" || true
+
+    echo ""
+    echo "✅ Vault unsealed!"
+    echo "Root Token: $ROOT_TOKEN"
     exit 0
 fi
 
 # Initialize Vault
 echo "Initializing Vault (this creates unseal keys and root token)..."
-INIT_OUTPUT=$(kubectl exec -n vault $VAULT_POD -- vault operator init -format=json)
 
-# Parse the output
-UNSEAL_KEY_1=$(echo "$INIT_OUTPUT" | grep -o '"unseal_keys_b64":\["[^"]*"' | cut -d'"' -f4)
-UNSEAL_KEY_2=$(echo "$INIT_OUTPUT" | grep -o '"unseal_keys_b64":\["[^"]*","[^"]*"' | cut -d'"' -f6)
-UNSEAL_KEY_3=$(echo "$INIT_OUTPUT" | grep -o '"unseal_keys_b64":\["[^"]*","[^"]*","[^"]*"' | cut -d'"' -f8)
-UNSEAL_KEY_4=$(echo "$INIT_OUTPUT" | grep -o '"unseal_keys_b64":\["[^"]*","[^"]*","[^"]*","[^"]*"' | cut -d'"' -f10)
-UNSEAL_KEY_5=$(echo "$INIT_OUTPUT" | grep -o '"unseal_keys_b64":\["[^"]*","[^"]*","[^"]*","[^"]*","[^"]*"' | cut -d'"' -f12)
-ROOT_TOKEN=$(echo "$INIT_OUTPUT" | grep -o '"root_token":"[^"]*"' | cut -d'"' -f4)
+# Initialize and save output to file
+INIT_FILE="/tmp/vault-init-$$.json"
+kubectl exec -n vault $VAULT_POD -- vault operator init -format=json > "$INIT_FILE" 2>&1 || {
+    echo "❌ Failed to initialize Vault"
+    cat "$INIT_FILE"
+    rm -f "$INIT_FILE"
+    exit 1
+}
+
+echo "Parsing initialization output..."
+
+# Extract keys and token using grep/sed (works without jq)
+UNSEAL_KEY_1=$(grep -o '"unseal_keys_b64":\[[^]]*\]' "$INIT_FILE" | sed 's/.*"\([^"]*\)".*/\1/' | sed -n '1p')
+UNSEAL_KEY_2=$(grep -o '"unseal_keys_b64":\[[^]]*\]' "$INIT_FILE" | grep -o '"[^"]*"' | sed 's/"//g' | sed -n '2p')
+UNSEAL_KEY_3=$(grep -o '"unseal_keys_b64":\[[^]]*\]' "$INIT_FILE" | grep -o '"[^"]*"' | sed 's/"//g' | sed -n '3p')
+UNSEAL_KEY_4=$(grep -o '"unseal_keys_b64":\[[^]]*\]' "$INIT_FILE" | grep -o '"[^"]*"' | sed 's/"//g' | sed -n '4p')
+UNSEAL_KEY_5=$(grep -o '"unseal_keys_b64":\[[^]]*\]' "$INIT_FILE" | grep -o '"[^"]*"' | sed 's/"//g' | sed -n '5p')
+ROOT_TOKEN=$(grep -o '"root_token":"[^"]*"' "$INIT_FILE" | cut -d'"' -f4)
+
+# Remove temp file
+rm -f "$INIT_FILE"
+
+# Validate we got the keys
+if [ -z "$UNSEAL_KEY_1" ] || [ -z "$ROOT_TOKEN" ]; then
+    echo "❌ Failed to parse initialization output"
+    exit 1
+fi
+
+echo "Keys extracted successfully"
 
 # Store in Kubernetes secret
 echo "Storing unseal keys in Kubernetes secret..."
@@ -90,11 +121,11 @@ vault login $ROOT_TOKEN
 EOF
 
 echo ""
-echo "✅ Vault initialized successfully!"
+echo "✅ Vault initialized and unsealed successfully!"
 echo ""
 echo "Root Token: $ROOT_TOKEN"
 echo ""
 echo "Credentials saved to: vault-credentials.txt"
 echo ""
-echo "Auto-unseal CronJob will keep Vault unsealed automatically."
-echo "To deploy auto-unseal: kubectl apply -f manifests/auto-unseal.yaml"
+echo "Check status:"
+echo "  kubectl exec -n vault $VAULT_POD -- vault status"
