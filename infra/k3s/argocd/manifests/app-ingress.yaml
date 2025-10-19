@@ -1,0 +1,27 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nodejs-app-ingress
+  namespace: default
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/buffering: "false"
+    traefik.ingress.kubernetes.io/timeout: "3600"
+    traefik.ingress.kubernetes.io/connection-header: "keep-alive"
+spec:
+  tls:
+  - hosts:
+    - api.bareuptime.co
+    secretName: api-bareuptime-tls
+  rules:
+  - host: api.bareuptime.co
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: nodejs-app-service
+            port:
+              number: 80
