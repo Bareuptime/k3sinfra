@@ -56,11 +56,16 @@ cd k3s/vault
 ```
 
 After installation:
-1. Initialize Vault: `kubectl exec -it vault-0 -n vault -- vault operator init`
-2. Save unseal keys and root token
-3. Unseal Vault (use 3 of 5 keys)
-4. Apply ingress: `kubectl apply -f manifests/ingress.yaml`
-5. Access at: https://vault.bareuptime.co
+1. Initialize with auto-unseal: `./init-vault.sh`
+2. Enable auto-unseal CronJob: `kubectl apply -f manifests/auto-unseal.yaml`
+3. Apply ingress: `kubectl apply -f manifests/ingress.yaml`
+4. Access at: https://vault.bareuptime.co
+
+Features:
+- Auto-unseal: Vault automatically unseals on restart
+- Credentials saved to `vault-credentials.txt`
+- Unseal keys stored in Kubernetes secret
+- CronJob checks every 5 minutes and unseals if needed
 
 #### ArgoCD
 ```bash
@@ -138,11 +143,18 @@ cd ../clickhouse && ./install.sh
 
 # 2. Install K3s components
 cd ../../k3s/vault && ./install.sh
+
+# 3. Initialize Vault with auto-unseal
+./init-vault.sh
+kubectl apply -f manifests/auto-unseal.yaml
+
+# 4. Install other K3s services
 cd ../argocd && ./install.sh
 cd ../redis && ./install.sh
 cd ../rabbitmq && ./install.sh
 
-# 3. Apply ingress configurations
+# 5. Apply ingress configurations
+cd ../../
 kubectl apply -f k3s/vault/manifests/ingress.yaml
 kubectl apply -f k3s/argocd/manifests/ingress.yaml
 kubectl apply -f k3s/argocd/manifests/app-ingress.yaml
@@ -155,6 +167,7 @@ kubectl apply -f k3s/argocd/manifests/app-ingress.yaml
 3. Store credentials in Vault after installation
 4. Change default passwords immediately
 5. Use TLS for all external access
+6. **Vault auto-unseal**: Unseal keys are stored in Kubernetes secrets for convenience. For production, consider using cloud KMS (AWS, GCP, Azure) for better security.
 
 ## Storing Secrets in Vault
 
