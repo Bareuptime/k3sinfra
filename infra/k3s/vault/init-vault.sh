@@ -9,8 +9,14 @@ fi
 echo "Initializing Vault..."
 
 # Wait for Vault pod
-echo "Waiting for Vault pod to be ready..."
-kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=vault --namespace vault --timeout=300s
+echo "Waiting for Vault pod to be running..."
+# Don't wait for 'ready' - Vault won't be ready until initialized/unsealed
+sleep 5
+until kubectl get pod -n vault -l app.kubernetes.io/name=vault 2>/dev/null | grep -q "Running\|0/"; do
+  echo "Waiting for Vault pod..."
+  sleep 5
+done
+echo "Vault pod found"
 
 VAULT_POD=$(kubectl get pod -n vault -l app.kubernetes.io/name=vault -o jsonpath='{.items[0].metadata.name}')
 

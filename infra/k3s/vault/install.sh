@@ -26,8 +26,14 @@ helm upgrade --install vault hashicorp/vault \
   --set "ui.enabled=true" \
   --set "injector.enabled=false"
 
-echo "Waiting for Vault pod to be ready..."
-kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=vault --namespace vault --timeout=300s
+echo "Waiting for Vault pod to start..."
+# Note: We don't wait for 'ready' because Vault won't be ready until initialized and unsealed
+sleep 10
+until kubectl get pod -n vault -l app.kubernetes.io/name=vault 2>/dev/null | grep -q "Running\|0/"; do
+  echo "Waiting for Vault pod to be created..."
+  sleep 5
+done
+echo "Vault pod is running (sealed state - this is normal)"
 
 echo "Vault installed successfully!"
 echo ""
