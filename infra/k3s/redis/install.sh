@@ -4,7 +4,28 @@ set -euo pipefail
 # Setup K3s kubeconfig
 if [ -z "${KUBECONFIG:-}" ] && [ -f /etc/rancher/k3s/k3s.yaml ]; then
     export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
-    echo "Using K3s kubeconfig: $KUBECONFIG"
+fi
+
+# Cleanup function
+cleanup() {
+    echo "Cleaning up Redis installation..."
+
+    # Uninstall Redis
+    helm uninstall redis -n ${NAMESPACE:-default} 2>/dev/null || true
+
+    # Delete PVCs
+    kubectl delete pvc -n ${NAMESPACE:-default} -l app.kubernetes.io/name=redis 2>/dev/null || true
+
+    # Clean local files
+    rm -f redis-info.txt
+
+    echo "✅ Redis cleanup complete!"
+    exit 0
+}
+
+# Check for cleanup flag
+if [ "${1:-}" = "-d" ]; then
+    cleanup
 fi
 
 echo "Installing Redis in K3s..."
@@ -25,7 +46,7 @@ if [[ -z "$REDIS_PASS" ]]; then
 fi
 
 # Add Bitnami repo
-helm repo add bitnami https://charts.bitnami.com/bitnami
+helm repo add bitnami https://charts.bitnami.com/bitnami 2>/dev/null || true
 helm repo update
 
 # Create namespace
@@ -42,25 +63,12 @@ helm upgrade --install redis bitnami/redis \
   --set replica.persistence.size=5Gi
 
 echo "Waiting for Redis to be ready..."
-kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=redis --namespace $NAMESPACE --timeout=300s
+kubectl wait --for=condition=available statefulset/redis-master -n $NAMESPACE --timeout=300s 2>/dev/null || true
 
 # Connection info
 REDIS_URL="redis://$REDIS_USER:$REDIS_PASS@redis-master.$NAMESPACE.svc.cluster.local:6379"
 
-echo ""
-echo "Redis installed successfully!"
-echo ""
-echo "Connection info:"
-echo "  URL: $REDIS_URL"
-echo "  Host: redis-master.$NAMESPACE.svc.cluster.local"
-echo "  Port: 6379"
-echo "  Username: $REDIS_USER"
-echo "  Password: $REDIS_PASS"
-echo ""
-echo "Test connection:"
-echo "  kubectl run redis-client --rm -it --restart=Never --image=redis:alpine --namespace $NAMESPACE -- redis-cli -h redis-master -a $REDIS_PASS"
-
-# Save connection info
+# Save credentials
 cat > redis-info.txt <<EOF
 Redis Installation Info
 =======================
@@ -72,9 +80,15 @@ Connection:
 URL: $REDIS_URL
 Host: redis-master.$NAMESPACE.svc.cluster.local
 Port: 6379
-
-Test:
-kubectl run redis-client --rm -it --restart=Never --image=redis:alpine --namespace $NAMESPACE -- redis-cli -h redis-master -a $REDIS_PASS
 EOF
 
-echo "Connection info saved to redis-info.txt"
+echo ""
+echo "========================================="
+echo "✅ Redis installed successfully!"
+echo "========================================="
+echo ""
+echo "Connection URL: $REDIS_URL"
+echo ""
+echo "Credentials saved to: redis-info.txt"
+echo ""
+echo "To cleanup: NAMESPACE=$NAMESPACE ./install.sh -d"

@@ -4,7 +4,28 @@ set -euo pipefail
 # Setup K3s kubeconfig
 if [ -z "${KUBECONFIG:-}" ] && [ -f /etc/rancher/k3s/k3s.yaml ]; then
     export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
-    echo "Using K3s kubeconfig: $KUBECONFIG"
+fi
+
+# Cleanup function
+cleanup() {
+    echo "Cleaning up RabbitMQ installation..."
+
+    # Uninstall RabbitMQ
+    helm uninstall rabbitmq -n ${NAMESPACE:-default} 2>/dev/null || true
+
+    # Delete PVCs
+    kubectl delete pvc -n ${NAMESPACE:-default} -l app.kubernetes.io/name=rabbitmq 2>/dev/null || true
+
+    # Clean local files
+    rm -f rabbitmq-info.txt
+
+    echo "✅ RabbitMQ cleanup complete!"
+    exit 0
+}
+
+# Check for cleanup flag
+if [ "${1:-}" = "-d" ]; then
+    cleanup
 fi
 
 echo "Installing RabbitMQ in K3s..."
@@ -25,7 +46,7 @@ if [[ -z "$RABBITMQ_PASS" ]]; then
 fi
 
 # Add Bitnami repo
-helm repo add bitnami https://charts.bitnami.com/bitnami
+helm repo add bitnami https://charts.bitnami.com/bitnami 2>/dev/null || true
 helm repo update
 
 # Create namespace
@@ -40,26 +61,13 @@ helm upgrade --install rabbitmq bitnami/rabbitmq \
   --set replicaCount=1
 
 echo "Waiting for RabbitMQ to be ready..."
-kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=rabbitmq --namespace $NAMESPACE --timeout=300s
+kubectl wait --for=condition=available statefulset/rabbitmq -n $NAMESPACE --timeout=300s 2>/dev/null || true
 
 # Connection info
 RABBITMQ_URL="amqp://$RABBITMQ_USER:$RABBITMQ_PASS@rabbitmq.$NAMESPACE.svc.cluster.local:5672"
 RABBITMQ_MGMT_URL="http://rabbitmq.$NAMESPACE.svc.cluster.local:15672"
 
-echo ""
-echo "RabbitMQ installed successfully!"
-echo ""
-echo "Connection info:"
-echo "  AMQP URL: $RABBITMQ_URL"
-echo "  Management URL: $RABBITMQ_MGMT_URL"
-echo "  Username: $RABBITMQ_USER"
-echo "  Password: $RABBITMQ_PASS"
-echo ""
-echo "Access Management UI:"
-echo "  kubectl port-forward svc/rabbitmq -n $NAMESPACE 15672:15672"
-echo "  Open http://localhost:15672"
-
-# Save connection info
+# Save credentials
 cat > rabbitmq-info.txt <<EOF
 RabbitMQ Installation Info
 ==========================
@@ -80,4 +88,14 @@ kubectl port-forward svc/rabbitmq -n $NAMESPACE 15672:15672
 Then open http://localhost:15672
 EOF
 
-echo "Connection info saved to rabbitmq-info.txt"
+echo ""
+echo "========================================="
+echo "✅ RabbitMQ installed successfully!"
+echo "========================================="
+echo ""
+echo "AMQP URL: $RABBITMQ_URL"
+echo "Management: http://localhost:15672 (after port-forward)"
+echo ""
+echo "Credentials saved to: rabbitmq-info.txt"
+echo ""
+echo "To cleanup: NAMESPACE=$NAMESPACE ./install.sh -d"
