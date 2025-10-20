@@ -48,6 +48,28 @@ Features:
 
 ### 2. K3s Components
 
+#### k3s install
+```bash
+sudo apt update && sudo apt upgrade -y
+sudo apt install curl -y
+```
+
+```bash
+curl -sfL https://get.k3s.io | sh -
+sudo systemctl status k3s
+```
+
+##### Verify
+```bash
+sudo k3s kubectl get nodes
+```
+
+To use `kubectl` without `sudo`:
+```bash
+sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
+sudo chown $USER:$USER ~/.kube/config
+```
+
 Install these in your Kubernetes cluster:
 
 #### cert-manager (Required First)
