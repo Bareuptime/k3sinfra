@@ -53,14 +53,16 @@ helm repo update
 kubectl create namespace $NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
 
 # Install Redis
+# Note: Add legacy image support if needed in future
 helm upgrade --install redis bitnami/redis \
   --namespace $NAMESPACE \
   --set auth.enabled=true \
   --set auth.username=$REDIS_USER \
   --set auth.password=$REDIS_PASS \
-  --set master.persistence.size=5Gi \
+  --set master.persistence.size=1Gi \
   --set replica.replicaCount=1 \
-  --set replica.persistence.size=5Gi
+  --set replica.persistence.size=1Gi \
+  --set global.security.allowInsecureImages=true
 
 echo "Waiting for Redis to be ready..."
 kubectl wait --for=condition=available statefulset/redis-master -n $NAMESPACE --timeout=300s 2>/dev/null || true
