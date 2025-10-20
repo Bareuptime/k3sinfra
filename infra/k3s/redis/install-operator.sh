@@ -36,8 +36,8 @@ fi
 echo "Installing Redis with Sentinel using OT-Container-Kit Operator..."
 
 # Prompt for configuration
-read -p "Enter namespace [default]: " NAMESPACE
-NAMESPACE=${NAMESPACE:-default}
+read -p "Enter namespace [common]: " NAMESPACE
+NAMESPACE=${NAMESPACE:-common}
 
 read -p "Enter Redis password: " REDIS_PASS
 
