@@ -125,9 +125,7 @@ spec:
         memory: 128Mi
       limits:
         cpu: 500m
-        memory: 512Mi
-  redisReplication:
-    name: redis
+        memory: 512Mi 
 EOF
 
 # Create Redis config
