@@ -60,12 +60,15 @@ kubectl wait --for=condition=Ready certificate/${SECRET_NAME} -n ${NAMESPACE} --
 echo "🌐 Applying ingress..."
 kubectl apply -f manifests/ingress.yaml
 
-echo "⚙️ Patching argocd-cm to set external URL..."
-kubectl patch configmap argocd-cm -n ${NAMESPACE} \
-  --type merge \
+echo "⚙️ Setting external URL and enabling insecure (HTTP) mode..."
+kubectl patch configmap argocd-cm -n ${NAMESPACE} --type merge \
   -p "{\"data\":{\"url\":\"https://${DOMAIN}\"}}"
 
-echo "🔁 Restarting argocd-server..."
+# ✅ add the ARGOCD_SERVER_INSECURE=true env variable
+kubectl patch deployment argocd-server -n ${NAMESPACE} --type='json' \
+  -p='[{"op":"add","path":"/spec/template/spec/containers/0/env/-","value":{"name":"ARGOCD_SERVER_INSECURE","value":"true"}}]'
+
+echo "🔁 Restarting ArgoCD server..."
 kubectl rollout restart deployment argocd-server -n ${NAMESPACE}
 kubectl rollout status deployment argocd-server -n ${NAMESPACE}
 
