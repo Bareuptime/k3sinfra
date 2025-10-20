@@ -102,8 +102,6 @@ spec:
         storageClassName: local-path
   redisConfig:
     additionalRedisConfig: redis-external-config
-  redisExporter:
-    enabled: false
 EOF
 
 # Create Redis Sentinel
