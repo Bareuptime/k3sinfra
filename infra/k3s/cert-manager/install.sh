@@ -18,7 +18,7 @@ cleanup() {
     helm uninstall cert-manager -n cert-manager 2>/dev/null || true
 
     # Delete CRDs
-    kubectl delete -f https://github.com/cert-manager/cert-manager/releases/download/v1.14.0/cert-manager.crds.yaml 2>/dev/null || true
+    kubectl delete -f https://github.com/cert-manager/cert-manager/releases/download/v1.18.0/cert-manager.crds.yaml 2>/dev/null || true
 
     # Delete namespace
     kubectl delete namespace cert-manager 2>/dev/null || true
@@ -61,13 +61,13 @@ kubectl create namespace cert-manager --dry-run=client -o yaml | kubectl apply -
 
 # Install cert-manager CRDs
 echo "Installing cert-manager CRDs..."
-kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.14.0/cert-manager.crds.yaml
+kubectl apply -f  
 
 # Install cert-manager
 echo "Installing cert-manager via Helm..."
 helm upgrade --install cert-manager jetstack/cert-manager \
   --namespace cert-manager \
-  --version v1.14.0 \
+  --version v1.18.0 \
   --set installCRDs=false \
   --set global.leaderElection.namespace=cert-manager
 
@@ -138,7 +138,7 @@ cat > cert-manager-info.txt <<EOF
 cert-manager Installation Info
 ==============================
 
-Version: v1.14.0
+Version: v1.18.0
 Namespace: cert-manager
 Email: $LETSENCRYPT_EMAIL
 
