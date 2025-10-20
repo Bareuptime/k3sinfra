@@ -116,6 +116,14 @@ spec:
   podSecurityContext:
     runAsUser: 1000
     fsGroup: 1000
+  redisSentinelConfig:
+    redisReplicationName: redis
+    masterGroupName: mymaster
+    redisPort: "6379"
+    quorum: "2"
+    parallelSyncs: "1"
+    failoverTimeout: "180000"
+    downAfterMilliseconds: "30000"
   kubernetesConfig:
     image: redis:7.4.1
     imagePullPolicy: IfNotPresent
@@ -126,17 +134,6 @@ spec:
       limits:
         cpu: 500m
         memory: 512Mi
-  redisReplication:
-    name: redis
-  storage:
-    volumeClaimTemplate:
-      spec:
-        accessModes:
-        - ReadWriteOnce
-        resources:
-          requests:
-            storage: 1Gi
-        storageClassName: local-path
 EOF
 
 # Create Redis config
