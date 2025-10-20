@@ -53,12 +53,16 @@ helm repo update
 kubectl create namespace $NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
 
 # Install RabbitMQ
+# Using bitnamilegacy repository due to Bitnami catalog changes (Aug 2025)
 helm upgrade --install rabbitmq bitnami/rabbitmq \
   --namespace $NAMESPACE \
   --set auth.username=$RABBITMQ_USER \
   --set auth.password=$RABBITMQ_PASS \
   --set persistence.size=8Gi \
   --set replicaCount=1 \
+  --set image.registry=docker.io \
+  --set image.repository=bitnamilegacy/rabbitmq \
+  --set image.tag=3.13.7-debian-12-r7 \
   --set resources.requests.memory=256Mi \
   --set resources.limits.memory=512Mi
 
