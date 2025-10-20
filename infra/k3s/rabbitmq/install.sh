@@ -75,8 +75,8 @@ helm upgrade --install rabbitmq bitnami/rabbitmq \
   --set persistence.size=8Gi \
   --set replicaCount=1 \
   --set image.registry=docker.io \
-  --set image.repository="$IMAGE_REPO" \
-  --set image.tag="$IMAGE_TAG" \
+  --set image.repository=bitnamilegacy/rabbitmq \
+  --set image.tag=3.13.7-debian-12-r7
   --set global.security.allowInsecureImages=true \
   --set resources.requests.memory=256Mi \
   --set resources.limits.memory=512Mi
