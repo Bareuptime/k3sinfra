@@ -78,6 +78,9 @@ metadata:
   namespace: $NAMESPACE
 spec:
   clusterSize: 3
+  podSecurityContext:
+    runAsUser: 1000
+    fsGroup: 1000
   kubernetesConfig:
     image: redis:7.4.1
     imagePullPolicy: IfNotPresent
@@ -101,9 +104,6 @@ spec:
     additionalRedisConfig: redis-external-config
   redisExporter:
     enabled: false
-  securityContext:
-    runAsUser: 1000
-    fsGroup: 1000
 EOF
 
 # Create Redis Sentinel
@@ -115,6 +115,9 @@ metadata:
   namespace: $NAMESPACE
 spec:
   clusterSize: 3
+  podSecurityContext:
+    runAsUser: 1000
+    fsGroup: 1000
   kubernetesConfig:
     image: redis:7.4.1
     imagePullPolicy: IfNotPresent
@@ -127,9 +130,6 @@ spec:
         memory: 512Mi
   redisReplication:
     name: redis
-  securityContext:
-    runAsUser: 1000
-    fsGroup: 1000
 EOF
 
 # Create Redis config
