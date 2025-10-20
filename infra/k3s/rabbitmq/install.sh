@@ -8,18 +8,18 @@ fi
 
 # Cleanup function
 cleanup() {
-    echo "Cleaning up RabbitMQ installation..."
+    echo "Cleaning up RabbitMQ Operator installation..."
 
-    # Uninstall RabbitMQ
-    helm uninstall rabbitmq -n ${NAMESPACE:-default} 2>/dev/null || true
+    # Delete RabbitMQ cluster
+    kubectl delete rabbitmqcluster rabbitmq -n $NAMESPACE 2>/dev/null || true
 
-    # Delete PVCs
-    kubectl delete pvc -n ${NAMESPACE:-default} -l app.kubernetes.io/name=rabbitmq 2>/dev/null || true
+    # Delete operator
+    kubectl delete -f https://github.com/rabbitmq/cluster-operator/releases/latest/download/cluster-operator.yml 2>/dev/null || true
 
     # Clean local files
-    rm -f rabbitmq-info.txt
+    rm -f rabbitmq-info.txt rabbitmq-cluster.yaml
 
-    echo "✅ RabbitMQ cleanup complete!"
+    echo "✅ RabbitMQ Operator cleanup complete!"
     exit 0
 }
 
@@ -28,11 +28,11 @@ if [ "${1:-}" = "-d" ]; then
     cleanup
 fi
 
-echo "Installing RabbitMQ in K3s..."
+echo "Installing RabbitMQ using Official Operator..."
 
 # Prompt for configuration
-read -p "Enter namespace [default]: " NAMESPACE
-NAMESPACE=${NAMESPACE:-default}
+read -p "Enter namespace [common]: " NAMESPACE
+NAMESPACE=${NAMESPACE:-common}
 
 read -p "Enter RabbitMQ username [admin]: " RABBITMQ_USER
 RABBITMQ_USER=${RABBITMQ_USER:-admin}
@@ -45,53 +45,58 @@ if [[ -z "$RABBITMQ_PASS" ]]; then
   exit 1
 fi
 
-# Add Bitnami repo
-helm repo add bitnami https://charts.bitnami.com/bitnami 2>/dev/null || true
-helm repo update
-
 # Create namespace
 kubectl create namespace $NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
 
+# Install RabbitMQ Cluster Operator
+echo "Installing RabbitMQ Cluster Operator..."
+kubectl apply -f https://github.com/rabbitmq/cluster-operator/releases/latest/download/cluster-operator.yml
 
-# Attempt to detect if the main repo still has the desired tag
-if curl -sfL "https://hub.docker.com/v2/repositories/bitnami/rabbitmq/tags/?page_size=1" \
-     | jq -e '.results | length > 0' >/dev/null 2>&1; then
-  # Main repo appears to have tags
-  IMAGE_REPO="bitnami/rabbitmq"
-  IMAGE_TAG="4.1.3-debian-12-r1"
-else
-  # Fallback to legacy
-  IMAGE_REPO="bitnamilegacy/rabbitmq"
-  IMAGE_TAG="3.13.7-debian-12-r7"
-fi
+echo "Waiting for operator to be ready..."
+kubectl wait --for=condition=available deployment/rabbitmq-cluster-operator -n rabbitmq-system --timeout=300s
 
+# Create RabbitMQ cluster manifest
+cat > rabbitmq-cluster.yaml <<EOF
+apiVersion: rabbitmq.com/v1beta1
+kind: RabbitmqCluster
+metadata:
+  name: rabbitmq
+  namespace: $NAMESPACE
+spec:
+  replicas: 1
+  image: rabbitmq:3.13-management
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  rabbitmq:
+    additionalConfig: |
+      default_user = $RABBITMQ_USER
+      default_pass = $RABBITMQ_PASS
+  persistence:
+    storageClassName: local-path
+    storage: 8Gi
+EOF
 
-# Install RabbitMQ
-# Using bitnamilegacy repository due to Bitnami catalog changes (Aug 2025)
-helm upgrade --install rabbitmq bitnami/rabbitmq \
-  --namespace $NAMESPACE \
-  --set auth.username=$RABBITMQ_USER \
-  --set auth.password=$RABBITMQ_PASS \
-  --set persistence.size=8Gi \
-  --set replicaCount=1 \
-  --set image.registry=docker.io \
-  --set image.repository=bitnamilegacy/rabbitmq \
-  --set image.tag=3.13.7-debian-12-r7 \
-  --set global.security.allowInsecureImages=true \
-  --set resources.requests.memory=256Mi \
-  --set resources.limits.memory=512Mi
+echo "Deploying RabbitMQ cluster..."
+kubectl apply -f rabbitmq-cluster.yaml
 
-echo "Waiting for RabbitMQ to be ready..."
-kubectl wait --for=condition=available statefulset/rabbitmq -n $NAMESPACE --timeout=300s 2>/dev/null || true
+echo "Waiting for RabbitMQ cluster to be ready..."
+sleep 20
+kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=rabbitmq -n $NAMESPACE --timeout=300s
 
-# Connection info
-RABBITMQ_URL="amqp://$RABBITMQ_USER:$RABBITMQ_PASS@rabbitmq.$NAMESPACE.svc.cluster.local:5672"
-RABBITMQ_MGMT_URL="http://rabbitmq.$NAMESPACE.svc.cluster.local:15672"
+# Get service info
+RABBITMQ_SERVICE=$(kubectl get service rabbitmq -n $NAMESPACE -o jsonpath='{.metadata.name}')
+RABBITMQ_URL="amqp://$RABBITMQ_USER:$RABBITMQ_PASS@$RABBITMQ_SERVICE.$NAMESPACE.svc.cluster.local:5672"
+RABBITMQ_MGMT_URL="http://$RABBITMQ_SERVICE.$NAMESPACE.svc.cluster.local:15672"
 
 # Save credentials
 cat > rabbitmq-info.txt <<EOF
-RabbitMQ Installation Info
-==========================
+RabbitMQ Operator Installation Info
+====================================
 Namespace: $NAMESPACE
 Username: $RABBITMQ_USER
 Password: $RABBITMQ_PASS
@@ -105,8 +110,13 @@ Ports:
 - Management: 15672
 
 Access Management UI:
-kubectl port-forward svc/rabbitmq -n $NAMESPACE 15672:15672
+kubectl port-forward svc/$RABBITMQ_SERVICE -n $NAMESPACE 15672:15672
 Then open http://localhost:15672
+
+Operator Info:
+- Uses official RabbitMQ Docker images
+- Managed by RabbitMQ Cluster Operator
+- Production-ready and officially supported
 EOF
 
 echo ""
@@ -119,4 +129,4 @@ echo "Management: http://localhost:15672 (after port-forward)"
 echo ""
 echo "Credentials saved to: rabbitmq-info.txt"
 echo ""
-echo "To cleanup: NAMESPACE=$NAMESPACE ./install.sh -d"
+echo "To cleanup: NAMESPACE=$NAMESPACE ./install-operator.sh -d"
