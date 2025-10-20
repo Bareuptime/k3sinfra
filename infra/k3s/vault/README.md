@@ -2,7 +2,12 @@
 
 Simple Vault setup for K3s with automatic unsealing.
 
-## Quick Start
+## Documentation
+
+- **[MANUAL_SETUP.md](MANUAL_SETUP.md)** - Complete step-by-step guide with explanations (recommended for first-time setup)
+- **README.md** (this file) - Quick reference and automation scripts
+
+## Quick Start (Automated)
 
 ```bash
 # 1. Install Vault
@@ -17,6 +22,8 @@ kubectl apply -f manifests/auto-unseal.yaml
 # 4. (Optional) Apply ingress
 kubectl apply -f manifests/ingress.yaml
 ```
+
+**First time setting up Vault?** Read [MANUAL_SETUP.md](MANUAL_SETUP.md) to understand each step.
 
 ## What is Auto-Unseal?
 
@@ -48,12 +55,45 @@ Vault starts in a "sealed" state and needs to be unsealed with keys before it ca
 
 ## Security Notes
 
-**WARNING**: This auto-unseal method stores unseal keys in Kubernetes secrets. This is convenient but less secure than:
-- Cloud KMS auto-unseal (AWS, GCP, Azure)
-- Hardware Security Module (HSM)
-- Manual unsealing
+**IMPORTANT SECURITY CONSIDERATIONS:**
 
-For production, consider using cloud KMS or keeping keys offline.
+This auto-unseal setup stores unseal keys in Kubernetes secrets, which provides convenience at the cost of security:
+
+**Pros:**
+- ✅ Automatic recovery from pod restarts
+- ✅ No manual intervention needed
+- ✅ Keys stored in etcd (encrypted at rest if enabled)
+
+**Cons:**
+- ❌ Anyone with cluster admin access can read the keys
+- ❌ Keys stored alongside the data they protect
+- ❌ Not compliant with many security standards
+
+**For Production Environments:**
+
+Consider these more secure alternatives:
+
+1. **Cloud KMS Auto-Unseal** (Recommended)
+   - AWS KMS, GCP Cloud KMS, or Azure Key Vault
+   - Keys never leave the cloud provider's HSM
+   - Vault unseals automatically but securely
+   - [Vault Docs: Auto-Unseal](https://www.vaultproject.io/docs/concepts/seal)
+
+2. **Hardware Security Module (HSM)**
+   - FIPS 140-2 compliant
+   - Keys stored in tamper-resistant hardware
+   - Enterprise-grade security
+
+3. **Manual Unsealing**
+   - Store keys offline (password manager, encrypted backup)
+   - Manual unseal required after each restart
+   - Most secure but least convenient
+
+**For Development/Testing:**
+- The Kubernetes secret method is acceptable
+- Ensure K8s RBAC is properly configured
+- Enable etcd encryption at rest
+- Backup the `vault-unseal-keys` secret to a secure location
 
 ## Usage After Setup
 
