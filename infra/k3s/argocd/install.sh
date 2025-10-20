@@ -62,9 +62,8 @@ EOF
     kubectl wait --for=condition=Ready certificate/${SECRET_NAME} -n ${NAMESPACE} --timeout=180s
 
     echo "🟢 Patching argocd-server service to expose HTTPS port..."
-    kubectl patch svc argocd-server -n ${NAMESPACE} \
-    --type='json' \
-    -p='[{"op":"add","path":"/spec/ports/-","value":{"name":"https","port":443,"targetPort":8080}}]' || true
+    kubectl patch svc argocd-server -n argocd --type='json' \
+  -p='[{"op":"remove","path":"/spec/ports/1"}]' || true
 
     echo "🟢 Editing argocd-server deployment to use TLS..."
     kubectl patch deployment argocd-server -n ${NAMESPACE} --type='json' -p='[
