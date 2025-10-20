@@ -11,10 +11,10 @@ metadata:
 spec:
   tls:
   - hosts:
-    - argocd.bareuptime.co
+    - argocd1.bareuptime.co
     secretName: argocd-tls-cert
   rules:
-  - host: argocd.bareuptime.co
+  - host: argocd1.bareuptime.co
     http:
       paths:
       - path: /

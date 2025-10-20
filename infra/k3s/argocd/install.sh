@@ -2,7 +2,7 @@
 set -euo pipefail
 
 NAMESPACE="argocd"
-DOMAIN="argocd.bareuptime.co"
+DOMAIN="argocd1.bareuptime.co"
 ISSUER="letsencrypt-prod"
 SECRET_NAME="argocd-tls-cert"
 
