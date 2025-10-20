@@ -61,7 +61,8 @@ kubectl create namespace cert-manager --dry-run=client -o yaml | kubectl apply -
 
 # Install cert-manager CRDs
 echo "Installing cert-manager CRDs..."
-kubectl apply -f  
+kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.18.0/cert-manager.crds.yaml
+ 
 
 # Install cert-manager
 echo "Installing cert-manager via Helm..."
