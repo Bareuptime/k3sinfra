@@ -16,7 +16,19 @@ Vault stores secrets securely but starts in a "sealed" state. You must:
 - K3s cluster running
 - `kubectl` configured
 - `helm` installed
+- **cert-manager installed** (required for TLS)
 - Domain DNS configured (for ingress)
+
+### Install cert-manager First
+
+If you haven't installed cert-manager yet:
+
+```bash
+cd infra/k3s/cert-manager
+./install.sh
+```
+
+See `infra/k3s/cert-manager/README.md` for details.
 
 ## Step 1: Install Vault
 
@@ -254,17 +266,30 @@ Login with the root token from `vault-credentials.txt`
 
 **Prerequisites:**
 - Domain DNS pointing to your K3s cluster
-- cert-manager installed for TLS certificates
+- cert-manager installed for TLS certificates (see Prerequisites section above)
+
+The ingress manifest uses cert-manager to automatically obtain a Let's Encrypt certificate:
 
 ```bash
 # Apply ingress
 kubectl apply -f manifests/ingress.yaml
 
-# Wait for certificate
+# Wait for certificate (cert-manager will request it automatically)
 kubectl get certificate -n vault
 
-# Access at: https://vault.bareuptime.co
+# Check certificate status
+kubectl describe certificate vault-tls-cert -n vault
+
+# Once ready, access at: https://vault.bareuptime.co
 ```
+
+**How it works:**
+1. Ingress has annotation: `cert-manager.io/cluster-issuer: "letsencrypt-prod"`
+2. cert-manager sees this and creates a Certificate resource
+3. Certificate requests TLS cert from Let's Encrypt
+4. Let's Encrypt validates domain via HTTP-01 challenge
+5. Certificate is issued and stored in `vault-tls-cert` secret
+6. Traefik uses the certificate for HTTPS
 
 ## Step 6: Configure Vault for Use
 

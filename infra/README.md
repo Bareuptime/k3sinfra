@@ -10,6 +10,7 @@ infra/
 │   ├── postgres/          # PostgreSQL with pgvector
 │   └── clickhouse/        # ClickHouse analytics DB
 └── k3s/                   # Kubernetes (K3s) deployments
+    ├── cert-manager/      # TLS certificate management
     ├── vault/             # HashiCorp Vault
     ├── argocd/            # ArgoCD GitOps
     ├── redis/             # Redis cache
@@ -48,6 +49,20 @@ Features:
 ### 2. K3s Components
 
 Install these in your Kubernetes cluster:
+
+#### cert-manager (Required First)
+```bash
+cd k3s/cert-manager
+./install.sh
+```
+
+**Important**: Install cert-manager before other K3s services that need TLS certificates.
+
+Features:
+- Automatic TLS certificate management
+- Let's Encrypt integration (production + staging)
+- Auto-renewal before expiry
+- HTTP-01 challenge validation via Traefik
 
 #### Vault (HashiCorp)
 ```bash
@@ -112,9 +127,9 @@ All services use `bareuptime.co` domain:
 - **Vault**: vault.bareuptime.co
 
 Make sure you have:
-1. DNS records pointing to your cluster
-2. cert-manager installed in K3s
-3. letsencrypt-prod ClusterIssuer configured
+1. DNS records pointing to your cluster (A records to cluster IP)
+2. cert-manager installed in K3s (see above)
+3. Port 80 accessible (for Let's Encrypt HTTP-01 validation)
 
 ## Prerequisites
 
@@ -141,19 +156,22 @@ export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 cd infra/baremetal/postgres && ./install.sh
 cd ../clickhouse && ./install.sh
 
-# 2. Install K3s components
-cd ../../k3s/vault && ./install.sh
+# 2. Install cert-manager (required for TLS)
+cd ../../k3s/cert-manager && ./install.sh
 
-# 3. Initialize Vault with auto-unseal
+# 3. Install Vault
+cd ../vault && ./install.sh
+
+# 4. Initialize Vault with auto-unseal
 ./init-vault.sh
 kubectl apply -f manifests/auto-unseal.yaml
 
-# 4. Install other K3s services
+# 5. Install other K3s services
 cd ../argocd && ./install.sh
 cd ../redis && ./install.sh
 cd ../rabbitmq && ./install.sh
 
-# 5. Apply ingress configurations
+# 6. Apply ingress configurations
 cd ../../
 kubectl apply -f k3s/vault/manifests/ingress.yaml
 kubectl apply -f k3s/argocd/manifests/ingress.yaml
