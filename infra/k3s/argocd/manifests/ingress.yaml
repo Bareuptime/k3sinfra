@@ -5,6 +5,8 @@ metadata:
   namespace: argocd
   annotations:
     traefik.ingress.kubernetes.io/router.tls: "true"
+    traefik.ingress.kubernetes.io/router.tls.passthrough: "true"
+    traefik.ingress.kubernetes.io/service.serversscheme: https
 spec:
   tls:
   - hosts:
@@ -20,4 +22,4 @@ spec:
           service:
             name: argocd-server
             port:
-              number: 8080
+              number: 443

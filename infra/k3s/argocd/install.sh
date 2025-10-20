@@ -30,6 +30,72 @@ cleanup() {
     exit 0
 }
 
+setup_https() {
+    echo "🚀 Fixing ArgoCD HTTPS (Traefik + Cert-Manager + ArgoCD integration)"
+    
+    NAMESPACE="argocd"
+    DOMAIN="argocd.bareuptime.co"
+    ISSUER="letsencrypt-prod"
+    SECRET_NAME="argocd-tls-cert"
+
+    echo "🟢 Ensuring cert-manager ClusterIssuer '${ISSUER}' exists..."
+    kubectl get clusterissuer "${ISSUER}" >/dev/null
+
+    echo "🟢 Creating Certificate in namespace ${NAMESPACE}..."
+    cat <<EOF | kubectl apply -f -
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: ${SECRET_NAME}
+  namespace: ${NAMESPACE}
+spec:
+  secretName: ${SECRET_NAME}
+  issuerRef:
+    name: ${ISSUER}
+    kind: ClusterIssuer
+  commonName: ${DOMAIN}
+  dnsNames:
+  - ${DOMAIN}
+EOF
+
+    echo "⏳ Waiting for certificate issuance..."
+    kubectl wait --for=condition=Ready certificate/${SECRET_NAME} -n ${NAMESPACE} --timeout=180s
+
+    echo "🟢 Patching argocd-server service to expose HTTPS port..."
+    kubectl patch svc argocd-server -n ${NAMESPACE} \
+    --type='json' \
+    -p='[{"op":"add","path":"/spec/ports/-","value":{"name":"https","port":443,"targetPort":8080}}]' || true
+
+    echo "🟢 Editing argocd-server deployment to use TLS..."
+    kubectl patch deployment argocd-server -n ${NAMESPACE} --type='json' -p='[
+    {"op":"remove","path":"/spec/template/spec/containers/0/command/3"},
+    {"op":"add","path":"/spec/template/spec/containers/0/command/-","value":"--tls-cert"},
+    {"op":"add","path":"/spec/template/spec/containers/0/command/-","value":"/app/config/tls/tls.crt"},
+    {"op":"add","path":"/spec/template/spec/containers/0/command/-","value":"--tls-key"},
+    {"op":"add","path":"/spec/template/spec/containers/0/command/-","value":"/app/config/tls/tls.key"},
+    {"op":"add","path":"/spec/template/spec/volumes/-","value":{"name":"tls-secret","secret":{"secretName":"'${SECRET_NAME}'"}}},
+    {"op":"add","path":"/spec/template/spec/containers/0/volumeMounts/-","value":{"name":"tls-secret","mountPath":"/app/config/tls"}}
+    ]'
+
+    echo "🟢 Updating ingress for Traefik TLS passthrough..."
+    kubectl annotate ingress argocd-server-ingress -n ${NAMESPACE} \
+    traefik.ingress.kubernetes.io/router.tls=true \
+    traefik.ingress.kubernetes.io/router.tls.passthrough=true \
+    traefik.ingress.kubernetes.io/service.serversscheme=https --overwrite
+
+    echo "🟢 Pointing ingress TLS section to new certificate secret..."
+    kubectl patch ingress argocd-server-ingress -n ${NAMESPACE} --type='json' \
+    -p='[{"op":"replace","path":"/spec/tls/0/secretName","value":"'${SECRET_NAME}'"},{"op":"replace","path":"/spec/rules/0/http/paths/0/backend/service/port/number","value":443}]'
+
+    echo "🔁 Restarting argocd-server deployment..."
+    kubectl rollout restart deployment argocd-server -n ${NAMESPACE}
+
+    echo "⏳ Waiting for pods to be ready..."
+    kubectl rollout status deployment argocd-server -n ${NAMESPACE}
+
+    echo "✅ ArgoCD HTTPS setup completed successfully!"
+}
+
 # Check for cleanup flag
 if [ "${1:-}" = "-d" ]; then
     cleanup
@@ -38,7 +104,7 @@ fi
 echo "Installing ArgoCD in K3s..."
 
 # Create namespace
-kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
+kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f - 
 
 # Install ArgoCD
 echo "Deploying ArgoCD..."
@@ -51,6 +117,9 @@ kubectl wait --for=condition=available deployment/argocd-server -n argocd --time
 # Apply ingress
 echo "Applying ingress..."
 kubectl apply -f manifests/ingress.yaml
+
+# Setup HTTPS
+setup_https
 
 # Get admin password
 echo "Retrieving admin credentials..."
