@@ -58,7 +58,12 @@ helm upgrade --install rabbitmq bitnami/rabbitmq \
   --set auth.username=$RABBITMQ_USER \
   --set auth.password=$RABBITMQ_PASS \
   --set persistence.size=8Gi \
-  --set replicaCount=1
+  --set replicaCount=1 \
+  --set image.repository=bitnami/rabbitmq \
+  --set image.tag=4.0.5-debian-12-r0 \
+  --set image.pullPolicy=IfNotPresent \
+  --set resources.requests.memory=256Mi \
+  --set resources.limits.memory=512Mi
 
 echo "Waiting for RabbitMQ to be ready..."
 kubectl wait --for=condition=available statefulset/rabbitmq -n $NAMESPACE --timeout=300s 2>/dev/null || true
