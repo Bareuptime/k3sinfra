@@ -125,7 +125,7 @@ spec:
     failoverTimeout: "180000"
     downAfterMilliseconds: "30000"
   kubernetesConfig:
-    image: redis:7.4.1
+    image: quay.io/opstree/redis-sentinel:v7.0.12
     imagePullPolicy: IfNotPresent
     resources:
       requests:
