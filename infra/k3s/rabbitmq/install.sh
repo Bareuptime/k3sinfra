@@ -52,6 +52,20 @@ helm repo update
 # Create namespace
 kubectl create namespace $NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
 
+
+# Attempt to detect if the main repo still has the desired tag
+if curl -sfL "https://hub.docker.com/v2/repositories/bitnami/rabbitmq/tags/?page_size=1" \
+     | jq -e '.results | length > 0' >/dev/null 2>&1; then
+  # Main repo appears to have tags
+  IMAGE_REPO="bitnami/rabbitmq"
+  IMAGE_TAG="4.1.3-debian-12-r1"
+else
+  # Fallback to legacy
+  IMAGE_REPO="bitnamilegacy/rabbitmq"
+  IMAGE_TAG="3.13.7-debian-12-r7"
+fi
+
+
 # Install RabbitMQ
 # Using bitnamilegacy repository due to Bitnami catalog changes (Aug 2025)
 helm upgrade --install rabbitmq bitnami/rabbitmq \
@@ -61,8 +75,8 @@ helm upgrade --install rabbitmq bitnami/rabbitmq \
   --set persistence.size=8Gi \
   --set replicaCount=1 \
   --set image.registry=docker.io \
-  --set image.repository=bitnamilegacy/rabbitmq \
-  --set image.tag=3.13.7-debian-12-r7 \
+  --set image.repository="$IMAGE_REPO" \
+  --set image.tag="$IMAGE_TAG" \
   --set global.security.allowInsecureImages=true \
   --set resources.requests.memory=256Mi \
   --set resources.limits.memory=512Mi
