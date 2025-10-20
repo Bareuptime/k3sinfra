@@ -125,7 +125,18 @@ spec:
         memory: 128Mi
       limits:
         cpu: 500m
-        memory: 512Mi 
+        memory: 512Mi
+  redisReplication:
+    name: redis
+  storage:
+    volumeClaimTemplate:
+      spec:
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi
+        storageClassName: local-path
 EOF
 
 # Create Redis config
