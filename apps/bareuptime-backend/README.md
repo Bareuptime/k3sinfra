@@ -5,55 +5,55 @@ Kubernetes deployment configuration for the BareUptime backend service, migrated
 ## Architecture
 
 - **Deployment**: 3 replicas with rolling updates
-- **Secrets Management**: External Secrets Operator (ESO) + Vault
+- **Secrets Management**: Vault Secrets Webhook (like Nomad templates!)
 - **Ingress**: Traefik with TLS (cert-manager)
 - **Storage**: 1Gi PVC with local-path storage class
 - **Domains**:
-  - `api1.bareuptime.co` (main API)
-  - `mcp1.bareuptime.co` (MCP endpoints)
+  - `api.bareuptime.co` (main API)
+  - `mcp.bareuptime.co` (MCP endpoints)
 
 ## Manifest Structure
 
-This deployment uses **3 consolidated manifest files** (managed via Kustomize):
+This deployment uses **2 manifest files** (managed via Kustomize):
 
-1. **`manifests.yaml`** - Core infrastructure (5 resources)
+1. **`manifests.yaml`** - Everything (6 resources)
    - Namespace
    - ServiceAccount (for Vault authentication)
    - PersistentVolumeClaim (1Gi storage)
    - Service (ClusterIP on port 8080)
-   - Deployment (3 replicas with anti-affinity)
+   - GHCR credentials secret (with Vault injection)
+   - Deployment (3 replicas with Vault annotations)
 
-2. **`secrets.yaml`** - Secrets management (8 resources)
-   - SecretStore (Vault connection)
-   - 7 ExternalSecrets (database, redis, github, app-config, google-sa, clickhouse, ghcr)
-
-3. **`ingress.yaml`** - Networking (kept separate for flexibility)
-   - IngressRoutes (api.bareuptime.co, mcp1.bareuptime.co)
+2. **`ingress.yaml`** - Networking
+   - IngressRoutes (api.bareuptime.co, mcp.bareuptime.co)
    - Certificates (Let's Encrypt)
    - Middlewares (CORS, rate limiting, security headers)
 
-All managed via `kustomization.yaml` and deployed through ArgoCD.
+**Simple like Nomad!** Secrets use `vault:` prefix just like Nomad templates.
 
 ## Prerequisites
 
 Before deploying, ensure you have the following installed in your K3s cluster:
 
-### 1. External Secrets Operator (ESO)
+### 1. Vault Secrets Webhook
 
 ```bash
-helm repo add external-secrets https://charts.external-secrets.io
-helm repo update
+# Install via our script (recommended)
+cd apps/bareuptime-backend
+chmod +x install-prerequisites.sh
+./install-prerequisites.sh
+```
 
-helm install external-secrets \
-  external-secrets/external-secrets \
-  -n external-secrets-system \
-  --create-namespace \
-  --set installCRDs=true
+Or manually:
+```bash
+cd infra/k3s/vault-webhook
+chmod +x install.sh
+./install.sh
 ```
 
 Verify:
 ```bash
-kubectl get pods -n external-secrets-system
+kubectl get pods -n vault -l app.kubernetes.io/name=vault-secrets-webhook
 ```
 
 ### 2. Vault Kubernetes Auth Configuration
@@ -62,7 +62,7 @@ Configure Vault to allow Kubernetes authentication:
 
 ```bash
 # Port-forward to Vault
-kubectl port-forward -n vault vault-0 8200:8200
+kubectl port-forward -n vault vault-0 8200:8200 &
 
 # In another terminal, login to Vault
 export VAULT_ADDR=http://localhost:8200
@@ -189,7 +189,7 @@ kubectl get application bareuptime-backend -n argocd -w
 ArgoCD will automatically:
 1. Create the namespace
 2. Deploy all resources
-3. Sync secrets from Vault via ESO
+3. Inject secrets from Vault via webhook (on pod startup)
 4. Request TLS certificates via cert-manager
 5. Start the backend pods
 
@@ -201,10 +201,6 @@ kubectl get application bareuptime-backend -n argocd
 
 # Check pods
 kubectl get pods -n bareuptime-backend
-
-# Check secrets (should be created by ESO)
-kubectl get externalsecrets -n bareuptime-backend
-kubectl get secrets -n bareuptime-backend
 
 # Check certificates
 kubectl get certificate -n bareuptime-backend
@@ -220,10 +216,10 @@ kubectl logs -n bareuptime-backend -l app=bareuptime-backend --tail=100 -f
 
 ```bash
 # Check health endpoint
-curl -k https://api1.bareuptime.co/health
+curl -k https://api.bareuptime.co/health
 
 # Check MCP endpoint
-curl -k https://mcp1.bareuptime.co/health
+curl -k https://mcp.bareuptime.co/health
 
 # View service details
 kubectl describe svc backend -n bareuptime-backend
@@ -235,8 +231,8 @@ kubectl describe svc backend -n bareuptime-backend
 
 | Nomad | Kubernetes |
 |-------|-----------|
-| `template` blocks | ExternalSecrets + ESO |
-| `auth` in config | imagePullSecrets |
+| `template` blocks | Vault annotations + `vault:` env vars |
+| `auth` in config | imagePullSecrets with `vault:` |
 | Consul service discovery | K8s Service + DNS |
 | Traefik tags | IngressRoute + Middleware CRDs |
 | Host volume | PersistentVolumeClaim |
@@ -244,17 +240,43 @@ kubectl describe svc backend -n bareuptime-backend
 | `spread` | Pod anti-affinity |
 | `update` stanza | Deployment strategy |
 
+### Secrets Injection
+
+**Nomad:**
+```hcl
+template {
+  data = <<EOH
+{{- with secret "secret/data/bareuptime/database" -}}
+DATABASE_URL={{ .Data.data.DATABASE_URL }}
+{{- end }}
+EOH
+  env = true
+}
+```
+
+**Kubernetes (this deployment):**
+```yaml
+annotations:
+  vault.security.banzaicloud.io/vault-role: "bareuptime-backend"
+
+env:
+  - name: DATABASE_URL
+    value: "vault:secret/data/bareuptime/database#DATABASE_URL"
+```
+
+**Same concept, different syntax!**
+
 ### Environment Variables
 
-All environment variables from Nomad templates are now sourced from Kubernetes Secrets created by ESO:
+All environment variables from Nomad templates are now injected via Vault Secrets Webhook:
 
-- **database-credentials**: `DATABASE_URL`
-- **redis-credentials**: `REDIS_PASSWORD`, `REDIS_SENTINELS`, `REDIS_MASTER_NAME`
-- **github-credentials**: `GHC_TOKEN`, `GITHUB_USERNAME`
-- **app-config**: All application configuration
-- **google-service-account**: Mounted as `/secrets/google-service-account.json`
-- **clickhouse-credentials**: `CLICKHOUSE_DATABASE`, `CLICKHOUSE_USERNAME`, `CLICKHOUSE_PASSWORD`, `CLICKHOUSE_URLS`
-- **ghcr-credentials**: Docker registry secret for pulling images from GitHub Container Registry
+- **Database**: `DATABASE_URL`
+- **Redis**: `REDIS_PASSWORD`, `REDIS_SENTINELS`, `REDIS_MASTER_NAME`
+- **GitHub**: `GHC_TOKEN`, `GITHUB_USERNAME`
+- **App config**: 20+ configuration values
+- **Google SA**: Mounted as `/secrets/google-service-account.json`
+- **ClickHouse**: `CLICKHOUSE_DATABASE`, `CLICKHOUSE_USERNAME`, `CLICKHOUSE_PASSWORD`, `CLICKHOUSE_URLS`
+- **GHCR**: Used in imagePullSecrets
 
 ### Resource Allocation
 
@@ -279,22 +301,31 @@ kubectl describe pod -n bareuptime-backend -l app=bareuptime-backend
 # Check events
 kubectl get events -n bareuptime-backend --sort-by='.lastTimestamp'
 
-# Check init container logs
-kubectl logs -n bareuptime-backend <pod-name> -c wait-for-database
+# Check init container logs (vault-env)
+kubectl logs -n bareuptime-backend <pod-name> -c vault-env
+
+# Check main container logs
+kubectl logs -n bareuptime-backend <pod-name> -c backend
 ```
 
-### Secrets Not Syncing
+### Secrets Not Injecting
 
 ```bash
-# Check SecretStore status
-kubectl describe secretstore vault-backend -n bareuptime-backend
+# Check webhook logs
+kubectl logs -n vault -l app.kubernetes.io/name=vault-secrets-webhook
 
-# Check ExternalSecret status
-kubectl get externalsecrets -n bareuptime-backend
-kubectl describe externalsecret <secret-name> -n bareuptime-backend
+# Check vault-env init container
+kubectl logs <pod-name> -n bareuptime-backend -c vault-env
 
-# Check ESO logs
-kubectl logs -n external-secrets-system -l app.kubernetes.io/name=external-secrets
+# Verify Vault is accessible
+kubectl run -it --rm debug --image=curlimages/curl --restart=Never -- \
+  curl http://vault.vault.svc.cluster.local:8200/v1/sys/health
+
+# Check ServiceAccount exists
+kubectl get sa bareuptime-backend -n bareuptime-backend
+
+# Verify Vault role
+vault read auth/kubernetes/role/bareuptime-backend
 ```
 
 Common issues:
@@ -302,21 +333,16 @@ Common issues:
 - Kubernetes auth not configured in Vault
 - Wrong Vault paths
 - ServiceAccount missing
+- Webhook not installed
 
 ### Image Pull Errors
 
 ```bash
-# Check if secret exists
-kubectl get secret ghcr-credentials -n bareuptime-backend
-
-# Check secret content
+# Check if secret exists and has vault: values
 kubectl get secret ghcr-credentials -n bareuptime-backend -o yaml
 
-# Manually test image pull
-kubectl run test --image=ghcr.io/bareuptime/backend:latest \
-  --image-pull-policy=Always \
-  -n bareuptime-backend \
-  --overrides='{"spec":{"imagePullSecrets":[{"name":"ghcr-credentials"}]}}'
+# Check pod events
+kubectl get events -n bareuptime-backend --sort-by='.lastTimestamp' | grep Pull
 ```
 
 ### Certificate Not Issuing
@@ -415,17 +441,28 @@ kubectl delete namespace bareuptime-backend
 
 ## Security Considerations
 
-1. **Secrets**: All sensitive data in Vault, never in Git (including GHCR credentials)
-2. **Image Pull**: GHCR credentials synced from Vault via ESO
+1. **Secrets**: All sensitive data in Vault, injected at runtime (never in Git or etcd)
+2. **Image Pull**: GHCR credentials injected from Vault
 3. **TLS**: Automatic Let's Encrypt certificates
 4. **Rate Limiting**: Traefik middlewares prevent abuse
 5. **CORS**: Restricted to bareuptime.co domains
 6. **Security Headers**: Enforced via Traefik middleware
+
+## Advantages vs ESO/Sealed Secrets
+
+| Feature | ESO Approach | Vault Webhook (This) |
+|---------|--------------|---------------------|
+| Complexity | High (SecretStore + 7 ExternalSecrets) | Low (pod annotations) |
+| Syntax | Complex YAML | Like Nomad templates |
+| Secrets in K8s etcd | Yes (creates Secrets) | No (runtime injection) |
+| Auto-refresh | Yes (1h interval) | On pod restart |
+| Migration from Nomad | Different syntax | Similar syntax |
+| Simplicity | ❌ | ✅ |
 
 ## Support
 
 For issues:
 1. Check this README troubleshooting section
 2. Review ArgoCD application status
-3. Check pod logs and events
+3. Check pod logs and events (including vault-env init container)
 4. Verify Vault secrets and connectivity

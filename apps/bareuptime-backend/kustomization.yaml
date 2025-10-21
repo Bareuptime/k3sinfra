@@ -4,8 +4,7 @@ kind: Kustomization
 namespace: bareuptime-backend
 
 resources:
-  - manifests.yaml      # Core resources: namespace, serviceaccount, pvc, service, deployment
-  - secrets.yaml        # Secrets management: secretstore, externalsecrets (7 total)
+  - manifests.yaml      # Core resources: namespace, serviceaccount, pvc, service, deployment (with Vault annotations)
   - ingress.yaml        # Ingress routes and middlewares
 
 commonLabels:

@@ -11,23 +11,29 @@ if [ -z "${KUBECONFIG:-}" ] && [ -f /etc/rancher/k3s/k3s.yaml ]; then
     export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 fi
 
-# 1. Install External Secrets Operator
+# 1. Install Vault Secrets Webhook
 echo ""
-echo "📦 Installing External Secrets Operator..."
-if ! kubectl get namespace external-secrets-system &>/dev/null; then
-    helm repo add external-secrets https://charts.external-secrets.io 2>/dev/null || true
+echo "🔐 Installing Vault Secrets Webhook..."
+if ! kubectl get pods -n vault -l app.kubernetes.io/name=vault-secrets-webhook &>/dev/null | grep -q Running; then
+    # Add Banzai Cloud Helm repository
+    helm repo add banzaicloud-stable https://kubernetes-charts.banzaicloud.com 2>/dev/null || true
     helm repo update
 
-    helm install external-secrets \
-      external-secrets/external-secrets \
-      -n external-secrets-system \
+    # Install Vault Secrets Webhook
+    helm upgrade --install vault-secrets-webhook banzaicloud-stable/vault-secrets-webhook \
+      --namespace vault \
       --create-namespace \
-      --set installCRDs=true \
+      --set image.tag=latest \
+      --set env.VAULT_ADDR="http://vault.vault.svc.cluster.local:8200" \
+      --set env.VAULT_SKIP_VERIFY="true" \
+      --set configMapMutation=true \
+      --set secretInit.tag=latest \
+      --set env.VAULT_ROLE="default" \
       --wait
 
-    echo "✅ External Secrets Operator installed"
+    echo "✅ Vault Secrets Webhook installed"
 else
-    echo "✅ External Secrets Operator already installed"
+    echo "✅ Vault Secrets Webhook already installed"
 fi
 
 # 2. Verify cert-manager
