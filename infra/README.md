@@ -151,7 +151,7 @@ Features:
 
 All services use `bareuptime.co` domain:
 
-- **API**: api.bareuptime.co
+- **API**: api1.bareuptime.co
 - **ArgoCD**: argocd.bareuptime.co
 - **Vault**: vault.bareuptime.co
 

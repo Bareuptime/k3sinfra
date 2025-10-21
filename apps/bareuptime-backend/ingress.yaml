@@ -1,0 +1,142 @@
+---
+# Middlewares for security, rate limiting, and CORS
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: security-headers
+  namespace: bareuptime-backend
+spec:
+  headers:
+    frameDeny: true
+    contentTypeNosniff: true
+    browserXssFilter: true
+    referrerPolicy: "strict-origin-when-cross-origin"
+    stsSeconds: 31536000
+    stsIncludeSubdomains: true
+    stsPreload: true
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: rate-limit
+  namespace: bareuptime-backend
+spec:
+  rateLimit:
+    average: 200
+    burst: 400
+    period: 1m
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: api-rate-limit
+  namespace: bareuptime-backend
+spec:
+  rateLimit:
+    average: 100
+    burst: 200
+    period: 1m
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: cors-headers
+  namespace: bareuptime-backend
+spec:
+  headers:
+    accessControlAllowMethods:
+      - GET
+      - OPTIONS
+      - PUT
+      - POST
+      - DELETE
+    accessControlAllowOriginList:
+      - "https://*.bareuptime.co"
+      - "https://bareuptime.co"
+    accessControlAllowHeaders:
+      - Accept
+      - Authorization
+      - Cache-Control
+      - Content-Type
+      - DNT
+      - If-Modified-Since
+      - Keep-Alive
+      - Origin
+      - User-Agent
+      - X-Requested-With
+    accessControlMaxAge: 86400
+    addVaryHeader: true
+---
+# Certificate for api1.bareuptime.co
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: api-bareuptime-tls
+  namespace: bareuptime-backend
+spec:
+  secretName: api-bareuptime-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+    - api1.bareuptime.co
+---
+# Certificate for mcp.bareuptime.co
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: mcp-bareuptime-tls
+  namespace: bareuptime-backend
+spec:
+  secretName: mcp-bareuptime-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+    - mcp.bareuptime.co
+---
+# IngressRoute for api1.bareuptime.co
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: backend-api
+  namespace: bareuptime-backend
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`api1.bareuptime.co`)
+      kind: Rule
+      priority: 100
+      services:
+        - name: backend
+          port: 8080
+      middlewares:
+        - name: security-headers
+        - name: rate-limit
+        - name: cors-headers
+  tls:
+    secretName: api-bareuptime-tls
+---
+# IngressRoute for mcp.bareuptime.co
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: backend-mcp
+  namespace: bareuptime-backend
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`mcp.bareuptime.co`)
+      kind: Rule
+      priority: 100
+      services:
+        - name: backend
+          port: 8080
+      middlewares:
+        - name: security-headers
+        - name: api-rate-limit
+        - name: cors-headers
+  tls:
+    secretName: mcp-bareuptime-tls

@@ -1,0 +1,25 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: bareuptime-backend
+
+resources:
+  - namespace.yaml
+  - serviceaccount.yaml
+  - pvc.yaml
+  - service.yaml
+  - deployment.yaml
+  - ingress.yaml
+  - secretstore.yaml
+  - externalsecrets.yaml
+  # - sealed-secret-ghcr.yaml  # Uncomment after creating the SealedSecret
+
+commonLabels:
+  app: bareuptime-backend
+  environment: production
+  managed-by: argocd
+
+# Images to track (for ArgoCD image updater)
+images:
+  - name: ghcr.io/bareuptime/backend
+    newTag: latest
