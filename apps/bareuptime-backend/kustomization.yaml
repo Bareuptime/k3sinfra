@@ -12,7 +12,6 @@ resources:
   - ingress.yaml
   - secretstore.yaml
   - externalsecrets.yaml
-  # - sealed-secret-ghcr.yaml  # Uncomment after creating the SealedSecret
 
 commonLabels:
   app: bareuptime-backend

@@ -30,25 +30,7 @@ else
     echo "✅ External Secrets Operator already installed"
 fi
 
-# 2. Install Sealed Secrets
-echo ""
-echo "🔐 Installing Sealed Secrets..."
-if ! kubectl get pods -n kube-system -l app.kubernetes.io/name=sealed-secrets &>/dev/null | grep -q Running; then
-    helm repo add sealed-secrets https://bitnami-labs.github.io/sealed-secrets 2>/dev/null || true
-    helm repo update
-
-    helm install sealed-secrets \
-      sealed-secrets/sealed-secrets \
-      -n kube-system \
-      --set-string fullnameOverride=sealed-secrets-controller \
-      --wait
-
-    echo "✅ Sealed Secrets installed"
-else
-    echo "✅ Sealed Secrets already installed"
-fi
-
-# 3. Verify cert-manager
+# 2. Verify cert-manager
 echo ""
 echo "📜 Verifying cert-manager..."
 if kubectl get namespace cert-manager &>/dev/null; then
@@ -59,7 +41,7 @@ else
     exit 1
 fi
 
-# 4. Verify Vault
+# 3. Verify Vault
 echo ""
 echo "🔒 Verifying Vault..."
 if kubectl get namespace vault &>/dev/null; then
@@ -77,7 +59,7 @@ else
     exit 1
 fi
 
-# 5. Configure Vault Kubernetes Auth
+# 4. Configure Vault Kubernetes Auth
 echo ""
 echo "🔧 Configuring Vault Kubernetes authentication..."
 echo ""
@@ -120,6 +102,9 @@ path "secret/data/bareuptime/google-service-account" {
 path "secret/data/shared/clickhouse" {
   capabilities = ["read"]
 }
+path "secret/data/shared/ghcr" {
+  capabilities = ["read"]
+}
 POLICY
 
 # Create Kubernetes role
@@ -140,8 +125,8 @@ echo "========================================="
 echo ""
 echo "Next steps:"
 echo "1. Configure Vault (see commands above)"
-echo "2. Create GHCR credentials:"
-echo "   See apps/bareuptime-backend/README.md for instructions"
+echo "2. Add GHCR credentials to Vault:"
+echo "   vault kv put secret/shared/ghcr username=<github-username> password=<github-token>"
 echo "3. Deploy the application:"
 echo "   kubectl apply -f apps/bareuptime-backend/argocd-application.yaml"
 echo ""

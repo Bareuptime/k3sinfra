@@ -34,35 +34,7 @@ Verify:
 kubectl get pods -n external-secrets-system
 ```
 
-### 2. Sealed Secrets Controller
-
-```bash
-helm repo add sealed-secrets https://bitnami-labs.github.io/sealed-secrets
-helm repo update
-
-helm install sealed-secrets \
-  sealed-secrets/sealed-secrets \
-  -n kube-system \
-  --set-string fullnameOverride=sealed-secrets-controller
-```
-
-Verify:
-```bash
-kubectl get pods -n kube-system -l app.kubernetes.io/name=sealed-secrets
-```
-
-Install kubeseal CLI:
-```bash
-# macOS
-brew install kubeseal
-
-# Linux
-wget https://github.com/bitnami-labs/sealed-secrets/releases/download/v0.24.0/kubeseal-0.24.0-linux-amd64.tar.gz
-tar -xvzf kubeseal-0.24.0-linux-amd64.tar.gz
-sudo install -m 755 kubeseal /usr/local/bin/kubeseal
-```
-
-### 3. Vault Kubernetes Auth Configuration
+### 2. Vault Kubernetes Auth Configuration
 
 Configure Vault to allow Kubernetes authentication:
 
@@ -112,6 +84,11 @@ path "secret/data/bareuptime/google-service-account" {
 path "secret/data/shared/clickhouse" {
   capabilities = ["read"]
 }
+
+# GHCR credentials
+path "secret/data/shared/ghcr" {
+  capabilities = ["read"]
+}
 EOF
 
 # Create Kubernetes role
@@ -122,7 +99,7 @@ vault write auth/kubernetes/role/bareuptime-backend \
   ttl=24h
 ```
 
-### 4. Verify Vault Secrets Exist
+### 3. Verify Vault Secrets Exist
 
 Ensure all required secrets are in Vault at the correct paths:
 
@@ -144,11 +121,21 @@ vault kv get secret/bareuptime/google-service-account
 
 # Check ClickHouse credentials
 vault kv get secret/shared/clickhouse
+
+# Check GHCR credentials
+vault kv get secret/shared/ghcr
 ```
 
 If any secrets are missing, create them using the Nomad configuration as reference.
 
-### 5. cert-manager
+**Create GHCR credentials in Vault:**
+```bash
+vault kv put secret/shared/ghcr \
+  username="<your-github-username>" \
+  password="<your-github-token>"
+```
+
+### 4. cert-manager
 
 Should already be installed from infra setup. Verify:
 
@@ -157,7 +144,7 @@ kubectl get pods -n cert-manager
 kubectl get clusterissuer letsencrypt-prod
 ```
 
-### 6. Traefik
+### 5. Traefik
 
 Traefik should be the default ingress controller in K3s. Verify:
 
@@ -167,46 +154,7 @@ kubectl get pods -n kube-system -l app.kubernetes.io/name=traefik
 
 ## Deployment Steps
 
-### Step 1: Create GHCR Credentials SealedSecret
-
-Create the Docker registry secret for pulling images from GHCR:
-
-```bash
-# Create temporary secret
-kubectl create secret docker-registry ghcr-credentials \
-  --docker-server=ghcr.io \
-  --docker-username=<YOUR_GITHUB_USERNAME> \
-  --docker-password=<YOUR_GITHUB_TOKEN> \
-  --namespace=bareuptime-backend \
-  --dry-run=client -o yaml > /tmp/ghcr-secret.yaml
-
-# Seal it
-kubeseal --format=yaml \
-  --controller-namespace=kube-system \
-  --controller-name=sealed-secrets-controller \
-  < /tmp/ghcr-secret.yaml \
-  > apps/bareuptime-backend/sealed-secret-ghcr.yaml
-
-# Delete temporary file
-rm /tmp/ghcr-secret.yaml
-
-# Uncomment the sealed-secret in kustomization.yaml
-# Edit kustomization.yaml and uncomment:
-#   - sealed-secret-ghcr.yaml
-```
-
-**Alternative (Quick Test):** Create the secret manually:
-
-```bash
-kubectl create namespace bareuptime-backend
-kubectl create secret docker-registry ghcr-credentials \
-  --docker-server=ghcr.io \
-  --docker-username=<YOUR_GITHUB_USERNAME> \
-  --docker-password=<YOUR_GITHUB_TOKEN> \
-  --namespace=bareuptime-backend
-```
-
-### Step 2: Deploy with ArgoCD
+### Step 1: Deploy with ArgoCD
 
 ```bash
 # Apply the ArgoCD Application
@@ -223,7 +171,7 @@ ArgoCD will automatically:
 4. Request TLS certificates via cert-manager
 5. Start the backend pods
 
-### Step 3: Verify Deployment
+### Step 2: Verify Deployment
 
 ```bash
 # Check ArgoCD app status
@@ -246,7 +194,7 @@ kubectl get ingressroute -n bareuptime-backend
 kubectl logs -n bareuptime-backend -l app=bareuptime-backend --tail=100 -f
 ```
 
-### Step 4: Test the Service
+### Step 3: Test the Service
 
 ```bash
 # Check health endpoint
@@ -284,6 +232,7 @@ All environment variables from Nomad templates are now sourced from Kubernetes S
 - **app-config**: All application configuration
 - **google-service-account**: Mounted as `/secrets/google-service-account.json`
 - **clickhouse-credentials**: `CLICKHOUSE_DATABASE`, `CLICKHOUSE_USERNAME`, `CLICKHOUSE_PASSWORD`, `CLICKHOUSE_URLS`
+- **ghcr-credentials**: Docker registry secret for pulling images from GitHub Container Registry
 
 ### Resource Allocation
 
@@ -444,8 +393,8 @@ kubectl delete namespace bareuptime-backend
 
 ## Security Considerations
 
-1. **Secrets**: All sensitive data in Vault, never in Git
-2. **Image Pull**: SealedSecret for GHCR credentials
+1. **Secrets**: All sensitive data in Vault, never in Git (including GHCR credentials)
+2. **Image Pull**: GHCR credentials synced from Vault via ESO
 3. **TLS**: Automatic Let's Encrypt certificates
 4. **Rate Limiting**: Traefik middlewares prevent abuse
 5. **CORS**: Restricted to bareuptime.co domains

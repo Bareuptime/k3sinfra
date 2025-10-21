@@ -297,8 +297,8 @@ Application running with:
 │  Layer 3: Secrets Management                                │
 │  ┌────────────────────────────────────────────────────────┐ │
 │  │ - All secrets in Vault (encrypted at rest)            │ │
-│  │ - Secrets synced to K8s via ESO                       │ │
-│  │ - SealedSecrets for GHCR credentials                  │ │
+│  │ - All secrets synced to K8s via ESO (including GHCR)  │ │
+│  │ - No secrets stored in Git                            │ │
 │  │ - Secrets mounted as env vars (not in image)          │ │
 │  └────────────────────────────────────────────────────────┘ │
 │                                                              │
