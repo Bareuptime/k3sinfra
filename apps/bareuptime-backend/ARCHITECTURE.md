@@ -161,6 +161,46 @@
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+## Manifest Organization
+
+The deployment uses **3 consolidated YAML files** for better maintainability:
+
+```
+apps/bareuptime-backend/
+├── manifests.yaml        (5 resources)
+│   ├── Namespace
+│   ├── ServiceAccount
+│   ├── PersistentVolumeClaim
+│   ├── Service
+│   └── Deployment
+│
+├── secrets.yaml          (8 resources)
+│   ├── SecretStore       (Vault connection)
+│   └── ExternalSecrets   (7 secrets)
+│       ├── database-credentials
+│       ├── redis-credentials
+│       ├── github-credentials
+│       ├── app-config
+│       ├── google-service-account
+│       ├── clickhouse-credentials
+│       └── ghcr-credentials
+│
+├── ingress.yaml          (4 resources)
+│   ├── IngressRoute (api.bareuptime.co)
+│   ├── IngressRoute (mcp1.bareuptime.co)
+│   ├── Certificate (api-bareuptime-tls)
+│   ├── Certificate (mcp-bareuptime-tls)
+│   └── Middlewares (CORS, rate-limit, security-headers)
+│
+└── kustomization.yaml    (orchestration)
+```
+
+**Benefits:**
+- Logical grouping of related resources
+- Easier to review and maintain
+- Clear separation of concerns (infrastructure, secrets, networking)
+- All managed via Kustomize and deployed through ArgoCD
+
 ## Data Flow
 
 ### 1. Request Flow
@@ -414,7 +454,7 @@ kubectl autoscale deployment bareuptime-backend \
 
 ### Vertical Scaling
 
-Update resource limits in `deployment.yaml`:
+Update resource limits in `manifests.yaml` (Deployment section):
 
 ```yaml
 resources:

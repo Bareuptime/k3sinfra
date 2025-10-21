@@ -1,3 +1,64 @@
+# BareUptime Backend - Core Kubernetes Resources
+# This file contains all core infrastructure: namespace, serviceaccount, storage, service, and deployment
+
+---
+# Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: bareuptime-backend
+  labels:
+    app: bareuptime-backend
+    environment: production
+
+---
+# ServiceAccount for Vault authentication
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: bareuptime-backend
+  namespace: bareuptime-backend
+  labels:
+    app: bareuptime-backend
+
+---
+# Persistent storage for application data
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: backend-storage
+  namespace: bareuptime-backend
+  labels:
+    app: bareuptime-backend
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 1Gi
+
+---
+# Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: bareuptime-backend
+  labels:
+    app: bareuptime-backend
+spec:
+  type: ClusterIP
+  selector:
+    app: bareuptime-backend
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP
+
+---
+# Deployment
 apiVersion: apps/v1
 kind: Deployment
 metadata:

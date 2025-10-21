@@ -67,8 +67,7 @@ echo "Please run these commands to configure Vault:"
 echo ""
 cat <<'EOF'
 # Port-forward to Vault
-kubectl port-forward -n vault vault-0 8200:8200 &
-VAULT_PF_PID=$!
+kubectl port-forward -n vault vault-0 8200:8200 & VAULT_PF_PID=$!
 sleep 2
 
 # Configure Vault

@@ -9,9 +9,9 @@ spec:
   project: default
 
   source:
-    repoURL: https://github.com/bareuptime/new-infra.git
+    repoURL: https://github.com/bareuptime/backend.git
     targetRevision: main
-    path: apps/bareuptime-backend
+    path: k8s
 
   destination:
     server: https://kubernetes.default.svc

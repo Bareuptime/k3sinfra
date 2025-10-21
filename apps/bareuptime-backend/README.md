@@ -10,7 +10,29 @@ Kubernetes deployment configuration for the BareUptime backend service, migrated
 - **Storage**: 1Gi PVC with local-path storage class
 - **Domains**:
   - `api1.bareuptime.co` (main API)
-  - `mcp.bareuptime.co` (MCP endpoints)
+  - `mcp1.bareuptime.co` (MCP endpoints)
+
+## Manifest Structure
+
+This deployment uses **3 consolidated manifest files** (managed via Kustomize):
+
+1. **`manifests.yaml`** - Core infrastructure (5 resources)
+   - Namespace
+   - ServiceAccount (for Vault authentication)
+   - PersistentVolumeClaim (1Gi storage)
+   - Service (ClusterIP on port 8080)
+   - Deployment (3 replicas with anti-affinity)
+
+2. **`secrets.yaml`** - Secrets management (8 resources)
+   - SecretStore (Vault connection)
+   - 7 ExternalSecrets (database, redis, github, app-config, google-sa, clickhouse, ghcr)
+
+3. **`ingress.yaml`** - Networking (kept separate for flexibility)
+   - IngressRoutes (api.bareuptime.co, mcp1.bareuptime.co)
+   - Certificates (Let's Encrypt)
+   - Middlewares (CORS, rate limiting, security headers)
+
+All managed via `kustomization.yaml` and deployed through ArgoCD.
 
 ## Prerequisites
 
@@ -201,7 +223,7 @@ kubectl logs -n bareuptime-backend -l app=bareuptime-backend --tail=100 -f
 curl -k https://api1.bareuptime.co/health
 
 # Check MCP endpoint
-curl -k https://mcp.bareuptime.co/health
+curl -k https://mcp1.bareuptime.co/health
 
 # View service details
 kubectl describe svc backend -n bareuptime-backend
@@ -329,7 +351,7 @@ curl http://localhost:8080/health
 ### Manual Update
 
 ```bash
-# Update image tag in deployment.yaml or via ArgoCD UI
+# Update image tag in manifests.yaml (Deployment section) or via ArgoCD UI
 # ArgoCD will automatically sync if auto-sync is enabled
 
 # Force sync
