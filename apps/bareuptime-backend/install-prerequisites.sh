@@ -15,12 +15,9 @@ fi
 echo ""
 echo "🔐 Installing Vault Secrets Webhook..."
 if ! kubectl get pods -n vault -l app.kubernetes.io/name=vault-secrets-webhook &>/dev/null | grep -q Running; then
-    # Add Banzai Cloud Helm repository
-    helm repo add banzaicloud-stable https://kubernetes-charts.banzaicloud.com 2>/dev/null || true
-    helm repo update
-
-    # Install Vault Secrets Webhook
-    helm upgrade --install vault-secrets-webhook banzaicloud-stable/vault-secrets-webhook \
+    # Install via Helm (OCI chart)
+    helm upgrade --install vault-secrets-webhook \
+      oci://ghcr.io/bank-vaults/helm-charts/vault-secrets-webhook \
       --namespace vault \
       --create-namespace \
       --set image.tag=latest \
