@@ -70,8 +70,8 @@ stringData:
     {
       "auths": {
         "ghcr.io": {
-          "username": "vault:secret/data/shared/ghcr#username",
-          "password": "vault:secret/data/shared/ghcr#password"
+          "username": "vault:secret/data/shared/ghcr#GITHUB_USERNAME",
+          "password": "vault:secret/data/shared/ghcr#GHC_TOKEN"
         }
       }
     }
