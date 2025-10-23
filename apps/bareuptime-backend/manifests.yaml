@@ -177,7 +177,7 @@ spec:
             - name: REDIS_MASTER_NAME
               value: "mymaster"
             - name: REDIS_SENTINELS
-              value: "redis-sentinel.common.svc.cluster.local:26379"
+              value: "redis-sentinel-sentinel.common.svc.cluster.local:26379"
 
             # GitHub credentials
             - name: GHC_TOKEN
