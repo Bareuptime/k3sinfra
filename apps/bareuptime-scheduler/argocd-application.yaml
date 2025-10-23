@@ -9,7 +9,7 @@ spec:
   project: default
 
   source:
-    repoURL: https://github.com/bareuptime/schedular.git
+    repoURL: https://github.com/Bareuptime/schedular.git
     targetRevision: main
     path: k8s
 
