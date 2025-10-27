@@ -15,7 +15,7 @@ spec:
 
   destination:
     server: https://kubernetes.default.svc
-    namespace: bareuptime-worker
+    namespace: bareuptime-backend
 
   syncPolicy:
     automated:
