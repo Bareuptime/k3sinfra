@@ -78,7 +78,7 @@ kubectl describe clusterissuer letsencrypt-prod
 Now apply the wildcard certificate:
 
 ```bash
-kubectl apply -f k3sinfra/apps/bareuptime-status-page/wildcard-certificate.yaml
+kubectl apply -f ~/k3sinfra/apps/bareuptime-status-page/wildcard-certificate.yaml
 ```
 
 ### 5. Monitor Certificate Issuance
