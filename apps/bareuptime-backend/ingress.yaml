@@ -53,6 +53,8 @@ spec:
     accessControlAllowOriginList:
       - "https://*.bareuptime.co"
       - "https://bareuptime.co"
+      - "https://*.bareuptime.online"
+      - "https://bareuptime.online"
     accessControlAllowHeaders:
       - Accept
       - Authorization
@@ -140,3 +142,49 @@ spec:
         - name: cors-headers
   tls:
     secretName: mcp-bareuptime-tls
+---
+# IngressRoute for wildcard subdomains (*.bareuptime.online)
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: backend-wildcard-subdomains
+  namespace: bareuptime-backend
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`{subdomain:[a-z0-9-]+}.bareuptime.online`)
+      kind: Rule
+      priority: 50  # Lower than specific API domains, higher than catch-all
+      services:
+        - name: backend
+          port: 8080
+      middlewares:
+        - name: security-headers
+        - name: cors-headers
+  tls:
+    secretName: bareuptime-online-wildcard-tls
+---
+# IngressRoute for custom domains (catch-all)
+# IMPORTANT: This must have the LOWEST priority to avoid interfering with API domains
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: backend-custom-domains
+  namespace: bareuptime-backend
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: HostRegexp(`{host:.+}`) && !Host(`api1.bareuptime.co`, `mcp1.bareuptime.co`)
+      kind: Rule
+      priority: 1  # LOWEST priority - catch-all for custom domains
+      services:
+        - name: backend
+          port: 8080
+      middlewares:
+        - name: security-headers
+        - name: cors-headers
+  tls:
+    # Use certResolver for dynamic certificate provisioning via HTTP-01
+    certResolver: letsencrypt-prod
