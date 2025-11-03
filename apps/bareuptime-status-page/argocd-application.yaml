@@ -10,7 +10,7 @@ spec:
 
   source:
     # TODO: Update with your monorepo Git URL
-    repoURL: https://github.com/bareuptime/main-app.git
+    repoURL: https://github.com/bareuptime/bareuptime.git
     targetRevision: main
     path: status-pages/k8s
 
