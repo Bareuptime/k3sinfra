@@ -1,0 +1,62 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: bareuptime-online-wildcard-tls
+  namespace: bareuptime-backend
+spec:
+  # Secret where the certificate will be stored
+  secretName: bareuptime-online-wildcard-tls
+
+  # Use production Let's Encrypt
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+
+  # Domains covered by this certificate
+  dnsNames:
+    - '*.bareuptime.online'
+    - 'bareuptime.online'
+
+  # Wildcard certificates require DNS-01 challenge
+  acme:
+    # DNS-01 challenge configuration for Cloudflare
+    solvers:
+    - dns01:
+        cloudflare:
+          # Cloudflare API token stored in a secret
+          # You need to create this secret first (see instructions below)
+          apiTokenSecretRef:
+            name: cloudflare-api-token-secret
+            key: api-token
+
+---
+# INSTRUCTIONS TO CREATE CLOUDFLARE API TOKEN SECRET:
+#
+# 1. Create a Cloudflare API token:
+#    - Go to https://dash.cloudflare.com/profile/api-tokens
+#    - Click "Create Token"
+#    - Use template: "Edit zone DNS"
+#    - Zone Resources: Include -> Specific zone -> bareuptime.online
+#    - Copy the generated token
+#
+# 2. Create the Kubernetes secret:
+#
+  #  kubectl create secret generic cloudflare-api-token-secret \
+  #    --from-literal=api-token='<cloudflare-tolen>' \
+  #    -n bareuptime-backend
+#
+# 3. Apply this certificate configuration:
+#
+#    kubectl apply -f backend/k8s/wildcard-certificate.yaml
+#
+# 4. Check certificate status:
+#
+#    kubectl get certificate -n bareuptime-backend
+#    kubectl describe certificate bareuptime-online-wildcard-tls -n bareuptime-backend
+#
+# 5. If you see any errors, check cert-manager logs:
+#
+#    kubectl logs -n cert-manager deployment/cert-manager
+#
+# The certificate should be issued within a few minutes. Once ready,
+# your ingress will automatically use it for *.bareuptime.online domains.
