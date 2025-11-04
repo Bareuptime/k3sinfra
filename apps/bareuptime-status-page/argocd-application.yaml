@@ -10,9 +10,9 @@ spec:
 
   source:
     # TODO: Update with your monorepo Git URL
-    repoURL: https://github.com/bareuptime/bareuptime.git
+    repoURL: https://github.com/bareuptime/status-pages.git
     targetRevision: main
-    path: status-pages/k8s
+    path: k8s
 
   destination:
     server: https://kubernetes.default.svc
